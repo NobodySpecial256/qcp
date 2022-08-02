@@ -1,0 +1,60 @@
+#!/bin/bash
+
+set -e
+
+ID=$(xdotool getwindowfocus) # Get currently active window
+
+xprop -id "$ID" _QUBES_VMNAME | grep -q ' = ' \
+  || { echo "${0##*/}: Copy prohibited from dom0" >&2; notify-send "Refusing to interact with dom0 clipboard"; exit 1; }
+
+qube="$(xprop -id "$ID" _QUBES_VMNAME | cut -d\" -f2)" # Get the name of the focused qube
+
+if [[ "$1" == "copy" ]]; then
+	notify-send "Copying File" "from Qube $qube"
+	echo "$qube" > /tmp/qfilecp.from # Keep track of what qube we're copying from
+
+elif [[ "$1" == "paste" ]]; then
+	pwd="$(xprop -id "$ID" WM_NAME | cut -d\" -f2)" # Grab the currently-active window's title
+#################### Infer the path to paste into from the currently-active window's title ##############
+	if [[ "$pwd" == *"@$qube:"* ]]; then
+#		notify-send "Pasting into terminal"
+		pwd="$(echo "$pwd" | cut -d: -f2-)"
+	elif [[ "$pwd" == */* ]]; then
+		# Ignore, as pwd is already a full path
+		echo
+	elif [[ "$pwd" == "Home" ]]; then
+		pwd="/home/user" # Refer to user's home directory
+	else
+		pwd="~/$pwd"
+	fi
+	if [[ "$pwd" == "~/"* ]]; then
+		pwd="/home/user/$(echo "$pwd" | cut -d/ -f2-)"
+	elif [[ "$pwd" == "~" ]]; then
+		pwd="/home/user"
+	fi
+#########################################################################################################
+	src="$(head -n1 /tmp/qfilecp.from)" # The source qube to copy from
+	echo > /tmp/qfilecp.from
+	clip="$(cat /var/run/qubes/qubes-clipboard.bin)"
+	notify-send "$clip"
+	if [[ "$clip" == "" || "$src" == "" ]]; then
+		notify-send "Nothing to paste"
+		exit 2
+	fi
+	echo > /var/run/qubes/qubes-clipboard.bin # Clear the Qubes clipboard since it's no longer needed
+	notify-send "Pasting File(s)" "from Qube $src to $qube"
+	while read line; do
+		f="$line"
+		notify-send "Copying File" "$f"
+		o="$(basename "$f")"
+		printf -v esc "%q" "$f" # Sanitize filename to be passed to `ls`
+		ls="$(echo | qvm-run -u root --pass-io "$src" "ls -l '$esc'")" # I'm not sure why qvm-run expects me to quote the entire command here
+									# but this doesn't work with the normal syntax. Maybe it thinks
+									# `-l "$esc"` is an argument to `qvm-run`
+		owner="$(echo "$ls" | cut -d' ' -f3 | tr -dc a-zA-Z0-9_-)" # Get the file's original owner/group and trim invalid characters
+		group="$(echo "$ls" | cut -d' ' -f4 | tr -dc a-zA-Z0-9_-)" # We're a bit liberal in allowing improper Linux user/group names
+		echo | qvm-run -u root --pass-io "$src" cat "$f" | qvm-run -u root --pass-io "$qube" tee "$pwd/$o" > /dev/null # Actually copy the file
+		echo | qvm-run -u root "$qube" chown "$owner:$group" "$pwd/$o" # Set the user/group on the newly-created file to match the original
+	done <<< "$clip"
+	notify-send "Copied all files"
+fi
