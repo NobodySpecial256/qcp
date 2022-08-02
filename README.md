@@ -12,3 +12,7 @@ You move to the qube you wanna paste into and hit ctrl+shift+F to paste. It dete
 It can copy 1 file at a time, or multiple at once
 
 Feel free to review the script for security concerns or submit improvements
+
+### Can I use this to copy files to/from dom0?
+
+No. While it would be simple enough to modify this script to handle dom0's clipboard, copying files to dom0 is a security risk. While copying files from dom0 isn't necessarily as problematic, I thill think it's best simply to avoid dom0 altogether. If you really want to copy files from dom0, use the traditional Qubes method of copying files (`qvm-copy-to-vm`)
