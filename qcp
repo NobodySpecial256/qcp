@@ -36,7 +36,6 @@ elif [[ "$1" == "paste" ]]; then
 	src="$(head -n1 /tmp/qfilecp.from)" # The source qube to copy from
 	echo > /tmp/qfilecp.from
 	clip="$(cat /var/run/qubes/qubes-clipboard.bin)"
-	notify-send "$clip"
 	if [[ "$clip" == "" || "$src" == "" ]]; then
 		notify-send "Nothing to paste"
 		exit 2
